@@ -1010,14 +1010,14 @@
 
         function escapeHtml(str) {
             return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }
-    </script>
-</body>
-</html>
-// Call it once right away when the page loads
+      // Call it once right away when the page loads
 updateLeaderboard();
 
 // Then repeat every 10 seconds
 setInterval(() => {
     updateLeaderboard();
-}, 10000);
+}, 10000);  }
+    </script>
+</body>
+</html>
+
