@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shmonopoly: Infinite Multiplayer Clicker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        shmonopoly: {
+                            bg: '#050B14',
+                            card: '#0D1527',
+                            gold: '#FBBF24',
+                            emerald: '#10B981',
+                            cyan: '#06B6D4',
+                            purple: '#A855F7'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #050B14;
+            color: #F3F4F6;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(13, 21, 39, 0.85);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(251, 191, 36, 0.15);
+        }
+        .glass-panel-gold {
+            background: rgba(20, 27, 45, 0.9);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(251, 191, 36, 0.4);
+            box-shadow: 0 0 25px rgba(251, 191, 36, 0.15);
+        }
+        .floating-num {
+            position: absolute;
+            pointer-events: none;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            animation: floatUp 0.8s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+            z-index: 100;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(0.8) rotate(0deg); }
+            50% { transform: translate(-50%, -70px) scale(1.3) rotate(-5deg); }
+            100% { opacity: 0; transform: translate(-50%, -130px) scale(0.9) rotate(5deg); }
+        }
+        .taunt-bubble {
+            animation: tauntPop 2.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes tauntPop {
+            0% { opacity: 0; transform: scale(0.2) translateY(20px); }
+            15% { opacity: 1; transform: scale(1.05) translateY(0); }
+            85% { opacity: 1; transform: scale(1) translateY(0); }
+            100% { opacity: 0; transform: scale(0.8) translateY(-30px); }
+        }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(13, 21, 39, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(251, 191, 36, 0.3); border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen w-screen flex flex-col justify-between relative font-sans overflow-y-auto">
+
+    <!-- FLOATING OVERLAYS -->
+    <div id="tauntOverlay" class="fixed inset-0 pointer-events-none z-40 flex flex-col items-center justify-center p-4 gap-4"></div>
+    <div id="toastContainer" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-4"></div>
+
+    <!-- MAIN APP STRUCTURE -->
+    <div class="relative z-10 min-h-screen w-full flex flex-col justify-between p-3 md:p-5 max-w-7xl mx-auto gap-4">
+
+        <!-- BRANDING HEADER -->
+        <header class="flex flex-wrap justify-between items-center w-full glass-panel-gold p-4 rounded-2xl shadow-2xl gap-3">
+            <div class="flex items-center gap-3">
+                <button id="btnEditProfile" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20 active:scale-95 transition-all relative group" title="Customize Profile">
+                    <i id="hudAvatarIcon" class="fa-solid fa-gem text-slate-950 text-2xl"></i>
+                    <span class="absolute -bottom-1 -right-1 bg-slate-900 border border-amber-400 text-[9px] px-1 rounded-full text-amber-300 font-bold">Edit</span>
+                </button>
+                <div>
+                    <h1 class="font-orbitron font-black text-2xl md:text-3xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-500 drop-shadow">
+                        SHMONOPOLY
+                    </h1>
+                    <div class="text-xs text-slate-300 font-semibold flex items-center gap-2">
+                        <span id="playerNameDisplay" class="text-amber-300 font-bold">Tycoon</span>
+                        <span>•</span>
+                        <span id="statusDot" class="inline-block w-2 h-2 rounded-full bg-slate-500"></span>
+                        <span id="connectionStatus" class="text-slate-400">Saving...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Room / Multi-play Controls -->
+            <div class="flex items-center gap-2">
+                <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-amber-500/30 text-right">
+                    <div class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">ROOM</div>
+                    <div id="hudRoomCode" class="font-orbitron font-bold text-amber-400 text-xs md:text-sm tracking-widest">GLOBAL</div>
+                </div>
+                <button id="btnJoinOrCreateRoom" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-white rounded-xl transition-all active:scale-95 shadow-md flex items-center gap-1.5 text-xs font-bold">
+                    <i class="fa-solid fa-users text-amber-400"></i>
+                    <span class="hidden sm:inline">Friends</span>
+                </button>
+                <button id="btnShareRoom" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-amber-400 rounded-xl transition-all active:scale-95 shadow-md text-xs font-bold" title="Copy Invite Link">
+                    <i class="fa-solid fa-share-nodes"></i>
+                </button>
+                <button id="btnMuteSound" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-slate-300 rounded-xl transition-all active:scale-95 shadow-md text-xs" title="Sound FX">
+                    <i id="muteIcon" class="fa-solid fa-volume-high"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD GRID -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
+            
+            <!-- LEFT COLUMN: LEADERBOARDS & TAUNTS (4 cols) -->
+            <div class="lg:col-span-4 flex flex-col gap-4 order-2 lg:order-1">
+                <div class="glass-panel p-4 rounded-2xl flex-1 flex flex-col justify-between min-h-[380px] max-h-[600px]">
+                    <div>
+                        <!-- Leaderboard Tabs -->
+                        <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+                            <div class="flex gap-2">
+                                <button id="tabGlobal" class="px-3 py-1.5 rounded-xl font-orbitron text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                                    WORLDWIDE
+                                </button>
+                                <button id="tabRoom" class="px-3 py-1.5 rounded-xl font-orbitron text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700 hover:text-white">
+                                    ROOM
+                                </button>
+                            </div>
+                            <span class="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> LIVE
+                            </span>
+                        </div>
+
+                        <!-- Leaderboard Entries -->
+                        <div id="leaderboardList" class="space-y-2 overflow-y-auto max-h-[440px] pr-1"></div>
+                    </div>
+
+                    <!-- Personal Rank Quick Status -->
+                    <div class="mt-3 pt-3 border-t border-slate-800 flex justify-between items-center text-xs bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-400">YOUR RANK:</span>
+                            <span id="footerUserRank" class="font-orbitron font-black text-amber-400">#--</span>
+                        </div>
+                        <div class="font-orbitron font-bold text-emerald-400" id="footerUserScore">$0</div>
+                    </div>
+                </div>
+
+                <!-- Quick Emote Taunt Bar -->
+                <div class="glass-panel p-3 rounded-2xl">
+                    <div class="text-[10px] font-orbitron font-bold text-slate-400 uppercase tracking-wider mb-2 flex justify-between items-center">
+                        <span><i class="fa-solid fa-comment-dots text-amber-400 mr-1"></i> TAUNT FRIENDS</span>
+                        <span class="text-slate-500">TAP TO SEND</span>
+                    </div>
+                    <div class="flex justify-between items-center gap-1.5">
+                        <button class="btnTaunt p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-lg active:scale-90 transition-transform" data-emoji="💸">💸</button>
+                        <button class="btnTaunt p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-lg active:scale-90 transition-transform" data-emoji="👑">👑</button>
+                        <button class="btnTaunt p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-lg active:scale-90 transition-transform" data-emoji="🚀">🚀</button>
+                        <button class="btnTaunt p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-lg active:scale-90 transition-transform" data-emoji="💼">💼</button>
+                        <button class="btnTaunt p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-lg active:scale-90 transition-transform" data-emoji="🔥">🔥</button>
+                        <button class="btnTaunt p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-lg active:scale-90 transition-transform" data-emoji="🏛️">🏛️</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CENTER COLUMN: CORE SHMONOPOLY COIN (4 cols) -->
+            <div class="lg:col-span-4 glass-panel p-5 rounded-2xl flex flex-col justify-between items-center relative overflow-hidden order-1 lg:order-2 min-h-[440px]">
+                
+                <!-- Player Score HUD Header -->
+                <div class="w-full flex justify-between items-center z-10 bg-slate-900/90 p-3.5 rounded-xl border border-amber-500/20 shadow-inner">
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">NET WORTH</div>
+                        <div id="statCurrentMoney" class="font-orbitron text-2xl md:text-3xl font-black text-amber-400 tracking-wide">$0</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">PASSIVE INCOME</div>
+                        <div id="statCPS" class="font-orbitron text-base md:text-lg font-bold text-emerald-400">+$0/s</div>
+                    </div>
+                </div>
+
+                <!-- Main Coin Button -->
+                <div class="relative my-auto flex items-center justify-center w-full py-6">
+                    <div class="absolute w-64 h-64 md:w-72 md:h-72 rounded-full border border-amber-500/20 animate-spin-slow"></div>
+                    <div class="absolute w-52 h-52 md:w-56 md:h-56 rounded-full border border-emerald-500/30 animate-spin-slow" style="animation-direction: reverse;"></div>
+                    
+                    <button id="shmonopolyCoinBtn" class="relative z-20 w-44 h-44 md:w-52 md:h-52 rounded-full bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-200 p-2 shadow-2xl shadow-amber-500/30 active:scale-90 transition-transform duration-75 focus:outline-none group">
+                        <div class="w-full h-full rounded-full bg-slate-950 flex flex-col items-center justify-center border-4 border-amber-400/40 group-hover:border-amber-300 transition-colors relative overflow-hidden">
+                            <i id="coreCenterIcon" class="fa-solid fa-gem text-5xl text-amber-400 mb-1 transition-transform group-hover:scale-110"></i>
+                            <span class="font-orbitron font-black text-xs md:text-sm text-amber-300 tracking-widest">TAP SHMONOPOLY</span>
+                            <span id="coreMultiplierBadge" class="mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-500/30">
+                                TAP: +$1
+                            </span>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Frenzy Boost Ability -->
+                <div class="w-full z-10 space-y-2">
+                    <div class="flex justify-between items-center text-xs font-orbitron font-bold">
+                        <span class="text-slate-400 flex items-center gap-1">
+                            <i class="fa-solid fa-bolt text-amber-400"></i> BULL MARKET BOOST
+                        </span>
+                        <span id="frenzyStatusText" class="text-amber-400">READY</span>
+                    </div>
+                    <button id="btnFrenzy" class="w-full py-3 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:opacity-90 text-slate-950 font-orbitron font-black text-sm rounded-xl shadow-lg transition-all active:scale-98 disabled:opacity-40 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-chart-line text-slate-950"></i> TRIGGER 2X MARKET RALLY (30s CD)
+                    </button>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: BUSINESS UPGRADES & PRESTIGE (4 cols) -->
+            <div class="lg:col-span-4 flex flex-col gap-4 order-3">
+                <div class="glass-panel p-4 rounded-2xl flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="text-xs font-orbitron font-bold text-amber-400 uppercase mb-3 flex items-center justify-between pb-2 border-b border-slate-800">
+                            <span><i class="fa-solid fa-city mr-1.5"></i> EMPIRE UPGRADES</span>
+                            <span id="prestigeBonusDisplay" class="text-[10px] text-emerald-400 font-bold">✨ +0% Global Bonus</span>
+                        </div>
+
+                        <div class="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                            <!-- Tap Power Upgrade -->
+                            <button id="upgTapBtn" class="w-full p-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 rounded-xl text-left flex items-center justify-between transition-all active:scale-98 disabled:opacity-40">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg bg-amber-950 border border-amber-500/30 flex items-center justify-center text-amber-400 text-sm">
+                                        <i class="fa-solid fa-hand-holding-dollar"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-bold text-white">High Roller Tap</div>
+                                        <div class="text-[10px] text-slate-400">+$1 per tap</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div id="upgTapCost" class="font-orbitron text-xs font-bold text-amber-400">$15</div>
+                                    <div id="upgTapLvl" class="text-[10px] text-slate-500">Lvl 0</div>
+                                </div>
+                            </button>
+
+                            <!-- Auto Asset 1 -->
+                            <button id="upgRailroadBtn" class="w-full p-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 rounded-xl text-left flex items-center justify-between transition-all active:scale-98 disabled:opacity-40">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg bg-emerald-950 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-sm">
+                                        <i class="fa-solid fa-train"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-bold text-white">Shmonopoly Railroads</div>
+                                        <div class="text-[10px] text-slate-400">+$2/sec passive income</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div id="upgRailroadCost" class="font-orbitron text-xs font-bold text-amber-400">$50</div>
+                                    <div id="upgRailroadLvl" class="text-[10px] text-slate-500">Lvl 0</div>
+                                </div>
+                            </button>
+
+                            <!-- Auto Asset 2 -->
+                            <button id="upgBoardwalkBtn" class="w-full p-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 rounded-xl text-left flex items-center justify-between transition-all active:scale-98 disabled:opacity-40">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg bg-cyan-950 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-sm">
+                                        <i class="fa-solid fa-building-columns"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-bold text-white">Boardwalk Luxury Plaza</div>
+                                        <div class="text-[10px] text-slate-400">+$15/sec passive income</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div id="upgBoardwalkCost" class="font-orbitron text-xs font-bold text-amber-400">$300</div>
+                                    <div id="upgBoardwalkLvl" class="text-[10px] text-slate-500">Lvl 0</div>
+                                </div>
+                            </button>
+
+                            <!-- Critical Strike Upgrade -->
+                            <button id="upgCritBtn" class="w-full p-3 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 rounded-xl text-left flex items-center justify-between transition-all active:scale-98 disabled:opacity-40">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg bg-purple-950 border border-purple-500/30 flex items-center justify-center text-purple-400 text-sm">
+                                        <i class="fa-solid fa-dice-five"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-bold text-white">Jackpot Crit Chance</div>
+                                        <div class="text-[10px] text-slate-400">+5% chance for 10x multiplier</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div id="upgCritCost" class="font-orbitron text-xs font-bold text-amber-400">$500</div>
+                                    <div id="upgCritLvl" class="text-[10px] text-slate-500">Lvl 0</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Ascension / Reinvest System -->
+                    <div class="mt-4 pt-3 border-t border-slate-800 bg-slate-900/90 p-3 rounded-xl border border-amber-500/30">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs font-orbitron font-bold text-amber-300 flex items-center gap-1">
+                                <i class="fa-solid fa-crown text-amber-400"></i> REINVEST EMPIRE
+                            </span>
+                            <span id="shardsGainText" class="text-xs font-orbitron font-bold text-emerald-400">+0 Badges</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mb-2">Prestige reset cash & businesses for Tycoon Badges (+15% permanent boost per badge).</p>
+                        <button id="btnAscend" class="w-full py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 text-slate-950 font-orbitron font-bold text-xs rounded-lg shadow-md transition-all active:scale-95 disabled:opacity-40">
+                            REINVEST NOW (Req. $1,000)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- PROFILE MODAL -->
+    <div id="profileModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel-gold p-6 rounded-3xl w-full max-w-md text-center border border-amber-500/40 shadow-2xl relative">
+            <h2 class="font-orbitron text-2xl font-black text-amber-400 mb-1">TYCOON PROFILE</h2>
+            <p class="text-xs text-slate-400 mb-5">Customize your name on the Leaderboards</p>
+
+            <div class="space-y-4 text-left mb-6">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Tycoon Name</label>
+                    <input type="text" id="inputProfileName" maxlength="16" placeholder="Enter Tycoon Name..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white font-semibold focus:outline-none focus:border-amber-400">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Avatar Emblem</label>
+                    <div id="modalAvatarSelector" class="flex justify-between items-center gap-2"></div>
+                </div>
+            </div>
+
+            <button id="btnSaveProfile" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 text-slate-950 font-orbitron font-bold rounded-xl shadow-lg transition-all active:scale-95">
+                SAVE & CONTINUE
+            </button>
+        </div>
+    </div>
+
+    <!-- ROOM MODAL -->
+    <div id="roomModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="glass-panel p-6 rounded-3xl w-full max-w-md text-center border border-slate-700 shadow-2xl relative">
+            <h2 class="font-orbitron text-2xl font-black text-amber-400 mb-1">PRIVATE ROOMS</h2>
+            <p class="text-xs text-slate-400 mb-5">Play with friends in private rooms!</p>
+
+            <div class="space-y-4 text-left mb-6">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Room Code</label>
+                    <input type="text" id="inputRoomCode" maxlength="8" placeholder="e.g. SQUAD1" class="uppercase font-orbitron tracking-widest w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:border-amber-400">
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button id="btnConfirmJoinRoom" class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 text-slate-950 font-orbitron font-bold rounded-xl shadow-lg active:scale-95 text-xs">
+                    JOIN ROOM
+                </button>
+                <button id="btnLeaveRoom" class="py-3 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-orbitron font-bold rounded-xl active:scale-95 text-xs">
+                    LEAVE ROOM
+                </button>
+            </div>
+            
+            <button id="btnCloseRoomModal" class="mt-3 text-xs text-slate-500 hover:text-slate-300 font-bold">Close</button>
+        </div>
+    </div>
+
+    <!-- FIREBASE & GAME ENGINE MODULE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'shmonopoly-game-v1';
+        let firebaseConfig = {
+            apiKey: "AIzaSyDummyKeyForFallbackPurposeOnly",
+            authDomain: "demo-app.firebaseapp.com",
+            projectId: "demo-app",
+            storageBucket: "demo-app.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567890:web:abcdef123456"
+        };
+
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            try { firebaseConfig = JSON.parse(__firebase_config); } catch(e) {}
+        }
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // WEB AUDIO SYNTHESIZER
+        class WebAudioSynth {
+            constructor() { this.ctx = null; this.muted = false; }
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+            playTap() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(450 + Math.random() * 200, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.06);
+                    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.06);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.06);
+                } catch(e) {}
+            }
+            playCrit() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1400, this.ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.15);
+                } catch(e) {}
+            }
+        }
+        const synth = new WebAudioSynth();
+
+        const AVATARS = [
+            { id: 'gem', icon: 'fa-gem', name: 'Diamond' },
+            { id: 'crown', icon: 'fa-crown', name: 'Royalty' },
+            { id: 'vault', icon: 'fa-vault', name: 'Vault' },
+            { id: 'briefcase', icon: 'fa-briefcase', name: 'Mogul' },
+            { id: 'rocket', icon: 'fa-rocket', name: 'Tycoon' }
+        ];
+
+        let currentUser = null;
+        let userId = null;
+        let currentRoomId = 'GLOBAL';
+        let isSimulatedMode = false;
+
+        let playerData = {
+            name: 'Tycoon_' + Math.floor(1000 + Math.random() * 9000),
+            avatar: 'gem',
+            currentMoney: 0,
+            lifetimeMoney: 0,
+            prestigeBadges: 0,
+            upgTapLvl: 0,
+            upgRailroadLvl: 0,
+            upgBoardwalkLvl: 0,
+            upgCritLvl: 0,
+            roomId: 'GLOBAL',
+            lastSavedTime: Date.now()
+        };
+
+        let activeTab = 'GLOBAL';
+        let globalPlayersCache = [];
+        let roomPlayersCache = [];
+        let frenzyActive = false;
+        let frenzyCooldown = false;
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `glass-panel px-4 py-2.5 rounded-xl text-xs font-bold text-white shadow-xl transition-all border ${type === 'error' ? 'border-red-500/50 bg-red-950/80' : 'border-amber-500/50 bg-slate-900/90'}`;
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        // LOCALSTORAGE PERSISTENCE FALLBACK
+        function saveToLocalStorage() {
+            try {
+                playerData.lastSavedTime = Date.now();
+                localStorage.setItem('shmonopoly_player_save', JSON.stringify(playerData));
+            } catch(e) {}
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const raw = localStorage.getItem('shmonopoly_player_save');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    playerData = { ...playerData, ...parsed };
+                    return true;
+                }
+            } catch(e) {}
+            return false;
+        }
+
+        // OFFLINE EARNINGS CALCULATOR
+        function checkOfflineEarnings() {
+            const now = Date.now();
+            const lastTime = playerData.lastSavedTime || now;
+            const diffSec = Math.floor((now - lastTime) / 1000);
+
+            if (diffSec > 5) {
+                const cps = getCPS();
+                if (cps > 0) {
+                    const offlineMoney = cps * diffSec;
+                    playerData.currentMoney += offlineMoney;
+                    playerData.lifetimeMoney += offlineMoney;
+                    showToast(`💰 Welcome Back! You earned $${formatNum(offlineMoney)} while offline! (${diffSec}s)`);
+                }
+            }
+        }
+
+        // AUTHENTICATION
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch(e) {
+                isSimulatedMode = true;
+            }
+        }
+
+        onAuthStateChanged(auth, (u) => {
+            currentUser = u;
+            userId = u?.uid || 'local_' + Math.random().toString(36).substring(2, 9);
+            document.getElementById('statusDot').className = 'inline-block w-2 h-2 rounded-full bg-emerald-400';
+            document.getElementById('connectionStatus').innerText = isSimulatedMode ? 'Local Mode' : 'Online & Saved';
+
+            loadPlayerData();
+            setupFirestoreListeners();
+        });
+
+        await initAuth();
+
+        function getLeaderboardColRef() {
+            return collection(db, 'artifacts', appId, 'public', 'data', 'shmonopoly_leaderboard');
+        }
+        function getUserDocRef(uid) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'shmonopoly_leaderboard', uid);
+        }
+        function getTauntDocRef(roomId) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'shmonopoly_taunts', roomId);
+        }
+
+        async function loadPlayerData() {
+            if (window.location.hash) {
+                const code = window.location.hash.replace('#', '').trim().toUpperCase();
+                if (code.length >= 3) {
+                    currentRoomId = code;
+                    playerData.roomId = code;
+                    document.getElementById('hudRoomCode').innerText = code;
+                }
+            }
+
+            // Attempt LocalStorage first for speed
+            loadFromLocalStorage();
+
+            if (!isSimulatedMode && currentUser) {
+                try {
+                    const snap = await getDoc(getUserDocRef(userId));
+                    if (snap.exists()) {
+                        playerData = { ...playerData, ...snap.data() };
+                    }
+                } catch(e) {}
+            }
+
+            checkOfflineEarnings();
+            updateUIFromState();
+            savePlayerDataToCloud();
+        }
+
+        async function savePlayerDataToCloud() {
+            playerData.lastSavedTime = Date.now();
+            saveToLocalStorage();
+
+            if (isSimulatedMode || !currentUser) return;
+            try {
+                const payload = {
+                    id: userId,
+                    name: playerData.name,
+                    avatar: playerData.avatar,
+                    currentMoney: playerData.currentMoney,
+                    lifetimeMoney: playerData.lifetimeMoney,
+                    prestigeBadges: playerData.prestigeBadges,
+                    upgTapLvl: playerData.upgTapLvl,
+                    upgRailroadLvl: playerData.upgRailroadLvl,
+                    upgBoardwalkLvl: playerData.upgBoardwalkLvl,
+                    upgCritLvl: playerData.upgCritLvl,
+                    roomId: playerData.roomId || 'GLOBAL',
+                    updatedAt: Date.now()
+                };
+                await setDoc(getUserDocRef(userId), payload, { merge: true });
+            } catch(e) {}
+        }
+
+        function setupFirestoreListeners() {
+            if (isSimulatedMode || !currentUser) return;
+
+            onSnapshot(getLeaderboardColRef(), (snapshot) => {
+                const allDocs = [];
+                snapshot.forEach(docSnap => allDocs.push(docSnap.data()));
+
+                allDocs.sort((a, b) => (b.currentMoney || 0) - (a.currentMoney || 0));
+                
+                globalPlayersCache = allDocs.slice(0, 50);
+                roomPlayersCache = allDocs.filter(p => (p.roomId || 'GLOBAL') === currentRoomId);
+
+                renderLeaderboard();
+                updatePersonalRank();
+            }, (err) => {});
+
+            onSnapshot(getTauntDocRef(currentRoomId), (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (data.timestamp > (window.lastTauntTime || 0) && data.senderId !== userId) {
+                        window.lastTauntTime = data.timestamp;
+                        showFloatingTaunt(data.emoji, data.senderName);
+                    }
+                }
+            }, (err) => {});
+        }
+
+        function updatePersonalRank() {
+            const rank = globalPlayersCache.findIndex(p => p.id === userId) + 1;
+            if (rank > 0) {
+                document.getElementById('footerUserRank').innerText = `#${rank}`;
+            } else {
+                document.getElementById('footerUserRank').innerText = `#50+`;
+            }
+        }
+
+        function renderLeaderboard() {
+            const list = document.getElementById('leaderboardList');
+            const targetArr = activeTab === 'GLOBAL' ? globalPlayersCache : roomPlayersCache;
+            list.innerHTML = '';
+
+            if (targetArr.length === 0) {
+                list.innerHTML = `<div class="text-center text-slate-500 py-8 text-xs font-bold">NO TYCOONS FOUND</div>`;
+                return;
+            }
+
+            targetArr.forEach((p, idx) => {
+                const isSelf = p.id === userId;
+                const avObj = AVATARS.find(a => a.id === p.avatar) || AVATARS[0];
+
+                let rankBadge = `#${idx + 1}`;
+                let rankColor = 'text-slate-400 bg-slate-800';
+                if (idx === 0) { rankBadge = '👑 1st'; rankColor = 'text-amber-300 bg-amber-500/20 border-amber-500/40'; }
+                else if (idx === 1) { rankBadge = '🥈 2nd'; rankColor = 'text-slate-200 bg-slate-400/20 border-slate-400/40'; }
+                else if (idx === 2) { rankBadge = '🥉 3rd'; rankColor = 'text-amber-600 bg-amber-700/20 border-amber-700/40'; }
+
+                const item = document.createElement('div');
+                item.className = `p-2.5 rounded-xl border flex justify-between items-center transition-all ${isSelf ? 'bg-amber-950/70 border-amber-500/60 shadow-lg shadow-amber-500/10' : 'bg-slate-900/70 border-slate-800/80'}`;
+                item.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-[10px] font-orbitron font-bold px-2 py-0.5 rounded-md border ${rankColor}">${rankBadge}</span>
+                        <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400 text-xs">
+                            <i class="fa-solid ${avObj.icon}"></i>
+                        </div>
+                        <div class="truncate max-w-[110px] sm:max-w-[140px]">
+                            <div class="text-xs font-bold ${isSelf ? 'text-amber-400' : 'text-white'} truncate">${escapeHtml(p.name)}</div>
+                            <div class="text-[9px] text-slate-400">${p.prestigeBadges ? `✨ ${p.prestigeBadges} Badges` : 'Tycoon'}</div>
+                        </div>
+                    </div>
+                    <div class="font-orbitron font-bold text-xs ${isSelf ? 'text-white' : 'text-emerald-400'}">
+                        $${formatNum(p.currentMoney || 0)}
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        document.getElementById('tabGlobal').onclick = () => {
+            activeTab = 'GLOBAL';
+            document.getElementById('tabGlobal').className = 'px-3 py-1.5 rounded-xl font-orbitron text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40';
+            document.getElementById('tabRoom').className = 'px-3 py-1.5 rounded-xl font-orbitron text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700 hover:text-white';
+            renderLeaderboard();
+        };
+
+        document.getElementById('tabRoom').onclick = () => {
+            activeTab = 'ROOM';
+            document.getElementById('tabRoom').className = 'px-3 py-1.5 rounded-xl font-orbitron text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40';
+            document.getElementById('tabGlobal').className = 'px-3 py-1.5 rounded-xl font-orbitron text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700 hover:text-white';
+            renderLeaderboard();
+        };
+
+        // COIN CLICK ENGINE
+        const coinBtn = document.getElementById('shmonopolyCoinBtn');
+        coinBtn.addEventListener('pointerdown', (e) => {
+            synth.init();
+            synth.playTap();
+
+            const tapPower = getTapPower();
+            let gain = tapPower;
+            let isCrit = false;
+
+            const critChance = playerData.upgCritLvl * 5;
+            if (Math.random() * 100 < critChance) {
+                gain *= 10;
+                isCrit = true;
+                synth.playCrit();
+            }
+
+            if (frenzyActive) gain *= 2;
+
+            playerData.currentMoney += gain;
+            playerData.lifetimeMoney += gain;
+
+            spawnFloatingNum(e.clientX, e.clientY, `+$${formatNum(gain)}`, isCrit ? '#FBBF24' : '#10B981');
+            updateUIFromState();
+            debouncedCloudSave();
+        });
+
+        function getTapPower() {
+            const base = 1 + playerData.upgTapLvl;
+            const badgeMult = 1 + (playerData.prestigeBadges * 0.15);
+            return Math.floor(base * badgeMult);
+        }
+
+        function getCPS() {
+            const base = (playerData.upgRailroadLvl * 2) + (playerData.upgBoardwalkLvl * 15);
+            const badgeMult = 1 + (playerData.prestigeBadges * 0.15);
+            return Math.floor(base * badgeMult);
+        }
+
+        // PASSIVE TICKER LOOP
+        setInterval(() => {
+            const cps = getCPS();
+            if (cps > 0) {
+                const gain = frenzyActive ? cps * 2 : cps;
+                playerData.currentMoney += gain;
+                playerData.lifetimeMoney += gain;
+                updateUIFromState();
+                debouncedCloudSave();
+            }
+        }, 1000);
+
+        // FRENZY ABILITY
+        document.getElementById('btnFrenzy').onclick = () => {
+            if (frenzyCooldown || frenzyActive) return;
+            synth.init();
+            synth.playCrit();
+
+            frenzyActive = true;
+            frenzyCooldown = true;
+            document.getElementById('btnFrenzy').disabled = true;
+            document.getElementById('frenzyStatusText').innerText = '🔥 ACTIVE (2X)';
+
+            setTimeout(() => {
+                frenzyActive = false;
+                document.getElementById('frenzyStatusText').innerText = 'COOLDOWN (30s)';
+
+                setTimeout(() => {
+                    frenzyCooldown = false;
+                    document.getElementById('btnFrenzy').disabled = false;
+                    document.getElementById('frenzyStatusText').innerText = 'READY';
+                }, 30000);
+            }, 10000);
+        };
+
+        // UPGRADE BUTTON HANDLERS
+        document.getElementById('upgTapBtn').onclick = () => {
+            const cost = Math.floor(15 * Math.pow(1.5, playerData.upgTapLvl));
+            if (playerData.currentMoney >= cost) {
+                playerData.currentMoney -= cost;
+                playerData.upgTapLvl++;
+                updateUIFromState();
+                savePlayerDataToCloud();
+            }
+        };
+
+        document.getElementById('upgRailroadBtn').onclick = () => {
+            const cost = Math.floor(50 * Math.pow(1.6, playerData.upgRailroadLvl));
+            if (playerData.currentMoney >= cost) {
+                playerData.currentMoney -= cost;
+                playerData.upgRailroadLvl++;
+                updateUIFromState();
+                savePlayerDataToCloud();
+            }
+        };
+
+        document.getElementById('upgBoardwalkBtn').onclick = () => {
+            const cost = Math.floor(300 * Math.pow(1.7, playerData.upgBoardwalkLvl));
+            if (playerData.currentMoney >= cost) {
+                playerData.currentMoney -= cost;
+                playerData.upgBoardwalkLvl++;
+                updateUIFromState();
+                savePlayerDataToCloud();
+            }
+        };
+
+        document.getElementById('upgCritBtn').onclick = () => {
+            const cost = Math.floor(500 * Math.pow(1.8, playerData.upgCritLvl));
+            if (playerData.currentMoney >= cost) {
+                playerData.currentMoney -= cost;
+                playerData.upgCritLvl++;
+                updateUIFromState();
+                savePlayerDataToCloud();
+            }
+        };
+
+        // PRESTIGE REINVESTMENT
+        document.getElementById('btnAscend').onclick = () => {
+            const gain = Math.floor(playerData.currentMoney / 1000);
+            if (gain < 1) return;
+
+            synth.init();
+            playerData.prestigeBadges += gain;
+            playerData.currentMoney = 0;
+            playerData.upgTapLvl = 0;
+            playerData.upgRailroadLvl = 0;
+            playerData.upgBoardwalkLvl = 0;
+            playerData.upgCritLvl = 0;
+
+            showToast(`✨ REINVESTED! Gained ${gain} Tycoon Badges!`);
+            try { confetti({ particleCount: 100, spread: 90, origin: { y: 0.5 } }); } catch(e) {}
+
+            updateUIFromState();
+            savePlayerDataToCloud();
+        };
+
+        // TAUNTS
+        document.querySelectorAll('.btnTaunt').forEach(btn => {
+            btn.onclick = async () => {
+                synth.init();
+                const emoji = btn.getAttribute('data-emoji');
+                showFloatingTaunt(emoji, playerData.name);
+
+                if (!isSimulatedMode && currentUser) {
+                    try {
+                        await setDoc(getTauntDocRef(currentRoomId), {
+                            emoji: emoji,
+                            senderId: userId,
+                            senderName: playerData.name,
+                            timestamp: Date.now()
+                        });
+                    } catch(e) {}
+                }
+            };
+        });
+
+        function showFloatingTaunt(emoji, name) {
+            const container = document.getElementById('tauntOverlay');
+            const bubble = document.createElement('div');
+            bubble.className = 'taunt-bubble glass-panel-gold px-5 py-3 rounded-2xl flex items-center gap-3 border border-amber-400 shadow-2xl pointer-events-none';
+            bubble.innerHTML = `
+                <span class="text-3xl">${emoji}</span>
+                <div>
+                    <div class="text-[10px] text-amber-300 font-orbitron font-bold uppercase">TAUNT FROM</div>
+                    <div class="text-xs font-black text-white">${escapeHtml(name)}</div>
+                </div>
+            `;
+            container.appendChild(bubble);
+            setTimeout(() => bubble.remove(), 2500);
+        }
+
+        // UPDATE UI
+        function updateUIFromState() {
+            document.getElementById('statCurrentMoney').innerText = `$${formatNum(playerData.currentMoney)}`;
+            document.getElementById('statCPS').innerText = `+$${formatNum(getCPS())}/s`;
+            document.getElementById('footerUserScore').innerText = `$${formatNum(playerData.currentMoney)}`;
+            document.getElementById('playerNameDisplay').innerText = playerData.name;
+            document.getElementById('coreMultiplierBadge').innerText = `TAP: +$${formatNum(getTapPower())}`;
+            document.getElementById('prestigeBonusDisplay').innerText = `✨ +${playerData.prestigeBadges * 15}% Bonus`;
+
+            // Tap Cost
+            const costTap = Math.floor(15 * Math.pow(1.5, playerData.upgTapLvl));
+            document.getElementById('upgTapCost').innerText = `$${formatNum(costTap)}`;
+            document.getElementById('upgTapLvl').innerText = `Lvl ${playerData.upgTapLvl}`;
+            document.getElementById('upgTapBtn').disabled = playerData.currentMoney < costTap;
+
+            // Railroad Cost
+            const costRail = Math.floor(50 * Math.pow(1.6, playerData.upgRailroadLvl));
+            document.getElementById('upgRailroadCost').innerText = `$${formatNum(costRail)}`;
+            document.getElementById('upgRailroadLvl').innerText = `Lvl ${playerData.upgRailroadLvl}`;
+            document.getElementById('upgRailroadBtn').disabled = playerData.currentMoney < costRail;
+
+            // Boardwalk Cost
+            const costBoard = Math.floor(300 * Math.pow(1.7, playerData.upgBoardwalkLvl));
+            document.getElementById('upgBoardwalkCost').innerText = `$${formatNum(costBoard)}`;
+            document.getElementById('upgBoardwalkLvl').innerText = `Lvl ${playerData.upgBoardwalkLvl}`;
+            document.getElementById('upgBoardwalkBtn').disabled = playerData.currentMoney < costBoard;
+
+            // Crit Cost
+            const costCrit = Math.floor(500 * Math.pow(1.8, playerData.upgCritLvl));
+            document.getElementById('upgCritCost').innerText = `$${formatNum(costCrit)}`;
+            document.getElementById('upgCritLvl').innerText = `Lvl ${playerData.upgCritLvl}`;
+            document.getElementById('upgCritBtn').disabled = playerData.currentMoney < costCrit;
+
+            // Ascension
+            const shardsGain = Math.floor(playerData.currentMoney / 1000);
+            document.getElementById('shardsGainText').innerText = `+${shardsGain} Badges`;
+            document.getElementById('btnAscend').disabled = shardsGain < 1;
+
+            // Avatar
+            const avObj = AVATARS.find(a => a.id === playerData.avatar) || AVATARS[0];
+            document.getElementById('hudAvatarIcon').className = `fa-solid ${avObj.icon} text-slate-950 text-2xl`;
+            document.getElementById('coreCenterIcon').className = `fa-solid ${avObj.icon} text-5xl text-amber-400 mb-1 transition-transform group-hover:scale-110`;
+        }
+
+        // MODALS
+        document.getElementById('btnEditProfile').onclick = () => {
+            document.getElementById('inputProfileName').value = playerData.name;
+            renderModalAvatars();
+            document.getElementById('profileModal').classList.remove('hidden');
+        };
+
+        function renderModalAvatars() {
+            const container = document.getElementById('modalAvatarSelector');
+            container.innerHTML = '';
+            AVATARS.forEach(av => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `w-11 h-11 rounded-xl border-2 flex items-center justify-center transition-all ${playerData.avatar === av.id ? 'border-amber-400 bg-amber-950/80 scale-110' : 'border-slate-800 bg-slate-900'}`;
+                btn.innerHTML = `<i class="fa-solid ${av.icon} text-amber-400"></i>`;
+                btn.onclick = () => {
+                    playerData.avatar = av.id;
+                    renderModalAvatars();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        document.getElementById('btnSaveProfile').onclick = () => {
+            const name = document.getElementById('inputProfileName').value.trim();
+            if (name.length > 0) playerData.name = name;
+            document.getElementById('profileModal').classList.add('hidden');
+            updateUIFromState();
+            savePlayerDataToCloud();
+        };
+
+        document.getElementById('btnJoinOrCreateRoom').onclick = () => {
+            document.getElementById('inputRoomCode').value = currentRoomId === 'GLOBAL' ? '' : currentRoomId;
+            document.getElementById('roomModal').classList.remove('hidden');
+        };
+
+        document.getElementById('btnCloseRoomModal').onclick = () => {
+            document.getElementById('roomModal').classList.add('hidden');
+        };
+
+        document.getElementById('btnConfirmJoinRoom').onclick = () => {
+            const code = document.getElementById('inputRoomCode').value.trim().toUpperCase() || 'GLOBAL';
+            currentRoomId = code;
+            playerData.roomId = code;
+            document.getElementById('hudRoomCode').innerText = code;
+            window.location.hash = `#${code}`;
+            document.getElementById('roomModal').classList.add('hidden');
+            showToast(`Joined Room: ${code}`);
+            savePlayerDataToCloud();
+            setupFirestoreListeners();
+        };
+
+        document.getElementById('btnLeaveRoom').onclick = () => {
+            currentRoomId = 'GLOBAL';
+            playerData.roomId = 'GLOBAL';
+            document.getElementById('hudRoomCode').innerText = 'GLOBAL';
+            window.location.hash = '';
+            document.getElementById('roomModal').classList.add('hidden');
+            showToast(`Returned to Global Arena`);
+            savePlayerDataToCloud();
+            setupFirestoreListeners();
+        };
+
+        document.getElementById('btnShareRoom').onclick = () => {
+            const url = window.location.origin + window.location.pathname + `#${currentRoomId}`;
+            navigator.clipboard.writeText(url).then(() => {
+                showToast("Room invite link copied!");
+            }).catch(() => {
+                showToast(`Room Code: ${currentRoomId}`);
+            });
+        };
+
+        document.getElementById('btnMuteSound').onclick = () => {
+            synth.muted = !synth.muted;
+            document.getElementById('muteIcon').className = synth.muted ? 'fa-solid fa-volume-xmark text-red-400' : 'fa-solid fa-volume-high text-slate-300';
+        };
+
+        let cloudSaveTimer = null;
+        function debouncedCloudSave() {
+            clearTimeout(cloudSaveTimer);
+            cloudSaveTimer = setTimeout(() => savePlayerDataToCloud(), 1500);
+        }
+
+        function spawnFloatingNum(x, y, text, color) {
+            const el = document.createElement('div');
+            el.className = 'floating-num';
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.color = color;
+            el.innerText = text;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+
+        function formatNum(num) {
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
